@@ -11,6 +11,11 @@ dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('ERRO: VITE_SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurados!');
+}
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const app = express();
@@ -46,7 +51,15 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .insert([{ name, phone, email, pin, address, reference, role }])
+      .insert([{ 
+        name, 
+        phone, 
+        email: email || null, 
+        pin, 
+        address: address || null, 
+        reference: reference || null, 
+        role 
+      }])
       .select()
       .single();
     
@@ -216,17 +229,18 @@ app.post('/api/partner/store', upload.fields([{ name: 'parking' }, { name: 'inte
     let parking_photo = null;
     let interior_photo = null;
 
-    if (req.files['parking']) {
-      parking_photo = await uploadToSupabase(req.files['parking'][0], 'photos');
+    if (req.files && (req.files as any)['parking']) {
+      parking_photo = await uploadToSupabase((req.files as any)['parking'][0], 'photos');
     }
-    if (req.files['interior']) {
-      interior_photo = await uploadToSupabase(req.files['interior'][0], 'photos');
+    if (req.files && (req.files as any)['interior']) {
+      interior_photo = await uploadToSupabase((req.files as any)['interior'][0], 'photos');
     }
 
     const { data, error } = await supabase
       .from('stores')
       .insert([{ 
-        owner_id, name, phone, address, email, 
+        owner_id, name, phone, address, 
+        email: email || null, 
         delivery_fee: parseFloat(delivery_fee), 
         min_free_delivery: min_free_delivery ? parseFloat(min_free_delivery) : null, 
         whatsapp, category,

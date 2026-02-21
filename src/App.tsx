@@ -191,6 +191,10 @@ export default function App() {
   };
 
   const handleRegister = async () => {
+    if (authData.role === 'partner' && partnerRegData.protocol !== PARTNER_SECRET_CODE) {
+      alert('Código de protocolo inválido. Entre em contato com o desenvolvedor.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
