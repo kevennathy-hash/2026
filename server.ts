@@ -8,14 +8,15 @@ import multer from 'multer';
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('ERRO: VITE_SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurados!');
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const getSupabase = () => {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  
+  if (!url || !key) {
+    throw new Error('Configuração do Supabase ausente (URL ou Service Key). Verifique as variáveis de ambiente no Vercel.');
+  }
+  return createClient(url, key);
+};
 
 const app = express();
 const server = createServer(app);
@@ -24,6 +25,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Helper to upload to Supabase Storage
 async function uploadToSupabase(file: any, bucket: string) {
+  const supabase = getSupabase();
   const fileName = `${Date.now()}-${file.originalname}`;
   const { data, error } = await supabase.storage
     .from(bucket)
@@ -31,7 +33,7 @@ async function uploadToSupabase(file: any, bucket: string) {
       contentType: file.mimetype,
       upsert: false
     });
-  
+    
   if (error) throw error;
   
   const { data: { publicUrl } } = supabase.storage
@@ -45,16 +47,30 @@ app.use(cors());
 app.use(express.json());
 
 // API Routes
+app.get('/api/ping', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    env: {
+      hasUrl: !!(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL),
+      hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    }
+  });
+});
+
 app.post('/api/auth/register', async (req, res) => {
   const { name, phone, email, pin, address, reference, role } = req.body;
+  console.log('Tentativa de registro:', { name, phone, role });
+  
   try {
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from('users')
       .insert([{ 
         name, 
         phone, 
         email: email || null, 
-        pin, 
+        pin: String(pin), 
         address: address || null, 
         reference: reference || null, 
         role 
@@ -62,28 +78,34 @@ app.post('/api/auth/register', async (req, res) => {
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Erro Supabase:', error);
+      return res.status(400).json({ error: error.message });
+    }
+    
     res.json({ id: data.id });
   } catch (e: any) {
-    res.status(400).json({ error: e.message });
+    console.error('Erro Interno:', e);
+    res.status(500).json({ error: e.message || 'Erro interno no servidor' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { phone, pin } = req.body;
   try {
+    const supabase = getSupabase();
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('phone', phone)
-      .eq('pin', pin)
+      .eq('pin', String(pin))
       .single();
 
     if (userError || !user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    const { data: store } = await supabase
+    const { data: store } = await getSupabase()
       .from('stores')
       .select('*')
       .eq('owner_id', user.id)
@@ -97,6 +119,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/stores', async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { data: stores, error } = await supabase
       .from('stores')
       .select('*')
@@ -111,6 +134,7 @@ app.get('/api/stores', async (req, res) => {
 
 app.get('/api/stores/:id/products', async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
@@ -128,6 +152,7 @@ app.post('/api/orders', async (req, res) => {
   const { client_id, store_id, items, total, payment_method, change_for } = req.body;
   
   try {
+    const supabase = getSupabase();
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([{ client_id, store_id, total, payment_method, change_for }])
@@ -143,7 +168,7 @@ app.post('/api/orders', async (req, res) => {
       price: item.price
     }));
 
-    const { error: itemsError } = await supabase
+    const { error: itemsError } = await getSupabase()
       .from('order_items')
       .insert(orderItems);
 
@@ -157,6 +182,7 @@ app.post('/api/orders', async (req, res) => {
 
 app.get('/api/orders/client/:id', async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -182,6 +208,7 @@ app.get('/api/orders/client/:id', async (req, res) => {
 
 app.get('/api/orders/store/:id', async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -209,6 +236,7 @@ app.get('/api/orders/store/:id', async (req, res) => {
 app.patch('/api/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   try {
+    const supabase = getSupabase();
     const { error } = await supabase
       .from('orders')
       .update({ status })
@@ -225,6 +253,7 @@ app.post('/api/partner/store', upload.fields([{ name: 'parking' }, { name: 'inte
   const { owner_id, name, phone, address, email, delivery_fee, min_free_delivery, whatsapp, category } = req.body;
   
   try {
+    const supabase = getSupabase();
     let parking_photo = null;
     let interior_photo = null;
 
@@ -264,6 +293,7 @@ app.post('/api/partner/products', upload.single('photo'), async (req: any, res) 
       photo = await uploadToSupabase(req.file, 'photos');
     }
 
+    const supabase = getSupabase();
     const { data, error } = await supabase
       .from('products')
       .insert([{ store_id, name, description, price: parseFloat(price), category, photo }])
@@ -279,6 +309,7 @@ app.post('/api/partner/products', upload.single('photo'), async (req: any, res) 
 
 app.delete('/api/partner/products/:id', async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { error } = await supabase
       .from('products')
       .delete()
@@ -294,6 +325,7 @@ app.delete('/api/partner/products/:id', async (req, res) => {
 app.patch('/api/partner/store/:id/status', async (req, res) => {
   const { status } = req.body;
   try {
+    const supabase = getSupabase();
     const { error } = await supabase
       .from('stores')
       .update({ status })

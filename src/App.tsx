@@ -143,29 +143,57 @@ export default function App() {
   }, [user, store]);
 
   const fetchStores = async () => {
-    const res = await fetch('/api/stores');
-    const data = await res.json();
-    setStores(data);
+    try {
+      const res = await fetch('/api/stores');
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        setStores(data);
+      }
+    } catch (e) {
+      console.error('Error fetching stores:', e);
+    }
   };
 
   const fetchProducts = async (storeId: number) => {
-    const res = await fetch(`/api/stores/${storeId}/products`);
-    const data = await res.json();
-    setProducts(data);
+    try {
+      const res = await fetch(`/api/stores/${storeId}/products`);
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        setProducts(data);
+      }
+    } catch (e) {
+      console.error('Error fetching products:', e);
+    }
   };
 
   const fetchMyOrders = async () => {
     if (!user) return;
-    const res = await fetch(`/api/orders/client/${user.id}`);
-    const data = await res.json();
-    setMyOrders(data);
+    try {
+      const res = await fetch(`/api/orders/client/${user.id}`);
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        setMyOrders(data);
+      }
+    } catch (e) {
+      console.error('Error fetching my orders:', e);
+    }
   };
 
   const fetchPartnerOrders = async () => {
     if (!store) return;
-    const res = await fetch(`/api/orders/store/${store.id}`);
-    const data = await res.json();
-    setPartnerOrders(data);
+    try {
+      const res = await fetch(`/api/orders/store/${store.id}`);
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        setPartnerOrders(data);
+      }
+    } catch (e) {
+      console.error('Error fetching partner orders:', e);
+    }
   };
 
   const handleLogin = async () => {
@@ -176,6 +204,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: authData.phone, pin: authData.pin })
       });
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error('O servidor retornou um erro inesperado (HTML). Verifique se o backend está rodando corretamente no Vercel.');
+      }
+
       const data = await res.json();
       if (res.ok) {
         setUser(data.user);
@@ -216,6 +250,13 @@ export default function App() {
         body: JSON.stringify(authData)
       });
       
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        console.error('Resposta não-JSON:', text);
+        throw new Error('O servidor retornou um erro inesperado. Verifique os logs do Vercel.');
+      }
+
       const data = await res.json();
       
       if (!res.ok) {
@@ -240,6 +281,11 @@ export default function App() {
           })
         });
         
+        const storeContentType = storeRes.headers.get("content-type");
+        if (!storeContentType || !storeContentType.includes("application/json")) {
+          throw new Error('Erro ao criar loja: O servidor retornou uma resposta inválida.');
+        }
+
         userStore = await storeRes.json();
         
         if (!storeRes.ok) {
