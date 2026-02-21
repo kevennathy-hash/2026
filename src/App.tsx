@@ -81,6 +81,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [regStep, setRegStep] = useState(1);
 
   // Auth State
   const [authData, setAuthData] = useState({ phone: '', pin: '', name: '', email: '', address: '', reference: '', role: 'client' as 'client' | 'partner' });
@@ -940,18 +941,16 @@ export default function App() {
   );
 
   const renderRegister = () => {
-    const [step, setStep] = useState(1);
-    
     return (
       <div className="min-h-screen bg-white px-8 pt-12 pb-12">
         <header className="mb-8 flex items-center gap-4">
-          <button onClick={() => step > 1 ? setStep(step - 1) : setView('login')} className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-600">
+          <button onClick={() => regStep > 1 ? setRegStep(regStep - 1) : setView('login')} className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-600">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-xl font-display font-bold">Criar Conta</h1>
         </header>
 
-        {step === 1 ? (
+        {regStep === 1 ? (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <div className="flex gap-4 mb-8">
               <button 
@@ -970,7 +969,7 @@ export default function App() {
             <Input label="Nome Completo" placeholder="Seu nome" value={authData.name} onChange={(e: any) => setAuthData({ ...authData, name: e.target.value })} />
             <Input label="Telefone" placeholder="(99) 99999-9999" value={authData.phone} onChange={(e: any) => setAuthData({ ...authData, phone: e.target.value })} />
             <Input label="PIN de Segurança (6 dígitos)" placeholder="••••••" type="password" maxLength={6} value={authData.pin} onChange={(e: any) => setAuthData({ ...authData, pin: e.target.value })} />
-            <Button onClick={() => setStep(2)} className="mt-4">Próximo Passo</Button>
+            <Button onClick={() => setRegStep(2)} className="mt-4">Próximo Passo</Button>
           </motion.div>
         ) : authData.role === 'client' ? (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
