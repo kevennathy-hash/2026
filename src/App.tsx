@@ -158,19 +158,24 @@ export default function App() {
     try {
       const res = await fetch('/api/stores');
       const contentType = res.headers.get("content-type");
+      
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
         if (Array.isArray(data)) {
           setStores(data);
         } else if (data.error) {
-          setError(data.error);
+          setError(`Erro do Servidor: ${data.error}`);
+        } else {
+          setError('Dados recebidos em formato inválido.');
         }
       } else {
-        setError('O servidor não respondeu corretamente. Verifique se o backend está configurado.');
+        const text = await res.text();
+        console.error('Resposta não-JSON recebida:', text.substring(0, 200));
+        setError(`O servidor retornou uma resposta inválida (Status: ${res.status}). Verifique se as variáveis de ambiente (SUPABASE_URL, etc) estão configuradas no Vercel.`);
       }
     } catch (e) {
       console.error('Error fetching stores:', e);
-      setError('Erro de conexão com o servidor.');
+      setError('Não foi possível conectar ao servidor. Verifique sua conexão.');
     }
   };
 
