@@ -100,6 +100,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (view === 'orders') fetchMyOrders();
+    if (view === 'partner_orders') fetchPartnerOrders();
+    if (view === 'partner_menu' && store) fetchProducts(store.id);
+  }, [view, user, store]);
+
+  useEffect(() => {
     if (user) {
       // Subscribe to orders changes
       const channel = supabase
@@ -1081,8 +1087,30 @@ export default function App() {
 
   // --- Main Render ---
 
-  if (!user && view !== 'register') return renderLogin();
-  if (view === 'register') return renderRegister();
+  const renderView = () => {
+    if (view === 'login') return renderLogin();
+    if (view === 'register') return renderRegister();
+    
+    // Protected views
+    if (!user) {
+      if (['checkout', 'orders', 'profile', 'partner_dashboard', 'partner_orders', 'partner_menu'].includes(view)) {
+        return renderLogin();
+      }
+    }
+
+    switch (view) {
+      case 'home': return renderHome();
+      case 'store_detail': return renderStoreDetail();
+      case 'cart': return renderCart();
+      case 'checkout': return renderCheckout();
+      case 'orders': return renderOrders();
+      case 'profile': return renderProfile();
+      case 'partner_dashboard': return renderPartnerDashboard();
+      case 'partner_orders': return renderPartnerOrders();
+      case 'partner_menu': return renderPartnerMenu();
+      default: return renderHome();
+    }
+  };
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 relative">
@@ -1094,15 +1122,7 @@ export default function App() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {view === 'home' && renderHome()}
-          {view === 'store_detail' && renderStoreDetail()}
-          {view === 'cart' && renderCart()}
-          {view === 'checkout' && renderCheckout()}
-          {view === 'orders' && renderOrders()}
-          {view === 'profile' && renderProfile()}
-          {view === 'partner_dashboard' && renderPartnerDashboard()}
-          {view === 'partner_orders' && renderPartnerOrders()}
-          {view === 'partner_menu' && renderPartnerMenu()}
+          {renderView()}
         </motion.div>
       </AnimatePresence>
 
@@ -1128,21 +1148,21 @@ export default function App() {
       </div>
 
       {/* Navigation Bar */}
-      {user && !['login', 'register', 'checkout', 'cart'].includes(view) && (
+      {!['login', 'register', 'checkout', 'cart'].includes(view) && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-8 py-4 flex justify-between items-center safe-bottom z-40 max-w-md mx-auto">
-          {user.role === 'client' ? (
+          {!user || user.role === 'client' ? (
             <>
               <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 ${view === 'home' ? 'text-primary' : 'text-slate-400'}`}>
                 <Home className="w-6 h-6" />
                 <span className="text-[10px] font-bold">Início</span>
               </button>
-              <button onClick={() => { fetchMyOrders(); setView('orders'); }} className={`flex flex-col items-center gap-1 ${view === 'orders' ? 'text-primary' : 'text-slate-400'}`}>
+              <button onClick={() => setView('orders')} className={`flex flex-col items-center gap-1 ${view === 'orders' ? 'text-primary' : 'text-slate-400'}`}>
                 <ShoppingBag className="w-6 h-6" />
                 <span className="text-[10px] font-bold">Pedidos</span>
               </button>
               <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 ${view === 'profile' ? 'text-primary' : 'text-slate-400'}`}>
                 <UserIcon className="w-6 h-6" />
-                <span className="text-[10px] font-bold">Perfil</span>
+                <span className="text-[10px] font-bold">{user ? 'Perfil' : 'Entrar'}</span>
               </button>
             </>
           ) : (
