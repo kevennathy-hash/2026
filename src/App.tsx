@@ -192,10 +192,22 @@ export default function App() {
   };
 
   const handleRegister = async () => {
-    if (authData.role === 'partner' && partnerRegData.protocol !== PARTNER_SECRET_CODE) {
-      alert('Código de protocolo inválido. Entre em contato com o desenvolvedor.');
+    if (!authData.name || !authData.phone || !authData.pin) {
+      alert('Por favor, preencha nome, telefone e PIN.');
       return;
     }
+
+    if (authData.role === 'partner') {
+      if (partnerRegData.protocol !== PARTNER_SECRET_CODE) {
+        alert('Código de protocolo inválido. Entre em contato com o desenvolvedor.');
+        return;
+      }
+      if (!partnerRegData.storeName || !partnerRegData.storePhone || !partnerRegData.storeAddress) {
+        alert('Por favor, preencha os dados da loja.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
@@ -203,36 +215,48 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(authData)
       });
+      
       const data = await res.json();
-      if (res.ok) {
-        let userStore = null;
-        if (authData.role === 'partner') {
-          const storeRes = await fetch('/api/partner/store', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              owner_id: data.id,
-              name: partnerRegData.storeName,
-              phone: partnerRegData.storePhone,
-              address: partnerRegData.storeAddress,
-              email: partnerRegData.storeEmail,
-              delivery_fee: parseFloat(partnerRegData.deliveryFee),
-              min_free_delivery: partnerRegData.minFree ? parseFloat(partnerRegData.minFree) : null,
-              category: partnerRegData.category,
-              whatsapp: partnerRegData.storePhone
-            })
-          });
-          userStore = await storeRes.json();
-          setStore(userStore);
-          localStorage.setItem('store', JSON.stringify(userStore));
-        }
-        const userWithId = { ...authData, id: data.id };
-        setUser(userWithId);
-        localStorage.setItem('user', JSON.stringify(userWithId));
-        setView(authData.role === 'partner' ? 'partner_dashboard' : 'home');
-      } else {
-        alert(data.error);
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao criar conta de usuário');
       }
+
+      let userStore = null;
+      if (authData.role === 'partner') {
+        const storeRes = await fetch('/api/partner/store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            owner_id: data.id,
+            name: partnerRegData.storeName,
+            phone: partnerRegData.storePhone,
+            address: partnerRegData.storeAddress,
+            email: partnerRegData.storeEmail,
+            delivery_fee: parseFloat(partnerRegData.deliveryFee) || 0,
+            min_free_delivery: partnerRegData.minFree ? parseFloat(partnerRegData.minFree) : null,
+            category: partnerRegData.category,
+            whatsapp: partnerRegData.storePhone
+          })
+        });
+        
+        userStore = await storeRes.json();
+        
+        if (!storeRes.ok) {
+          throw new Error(userStore.error || 'Erro ao criar loja');
+        }
+
+        setStore(userStore);
+        localStorage.setItem('store', JSON.stringify(userStore));
+      }
+
+      const userWithId = { ...authData, id: data.id };
+      setUser(userWithId);
+      localStorage.setItem('user', JSON.stringify(userWithId));
+      setView(authData.role === 'partner' ? 'partner_dashboard' : 'home');
+      
+    } catch (e: any) {
+      alert(e.message);
     } finally {
       setLoading(false);
     }
