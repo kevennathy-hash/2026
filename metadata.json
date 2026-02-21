@@ -1,0 +1,5 @@
+{
+  "name": "Delivery Pira",
+  "description": "O Delivery Pira conecta você aos melhores restaurantes, bares e lojas de Pirapemas, facilitando seus pedidos com comodidade e segurança.",
+  "requestFramePermissions": ["camera"]
+}
