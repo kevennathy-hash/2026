@@ -34,6 +34,11 @@ import { DEVELOPER_INFO, PARTNER_SECRET_CODE, ORDER_STATUS_LABELS, CATEGORIES } 
 // --- Supabase Client ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase configuration missing in frontend. Real-time updates will not work.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- Components ---
@@ -79,7 +84,7 @@ export default function App() {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [partnerOrders, setPartnerOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
   const [regStep, setRegStep] = useState(1);
 
@@ -149,15 +154,23 @@ export default function App() {
   }, [user, store]);
 
   const fetchStores = async () => {
+    setError(null);
     try {
       const res = await fetch('/api/stores');
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
-        setStores(data);
+        if (Array.isArray(data)) {
+          setStores(data);
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } else {
+        setError('O servidor não respondeu corretamente. Verifique se o backend está configurado.');
       }
     } catch (e) {
       console.error('Error fetching stores:', e);
+      setError('Erro de conexão com o servidor.');
     }
   };
 
@@ -167,7 +180,11 @@ export default function App() {
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
-        setProducts(data);
+        if (Array.isArray(data)) {
+          setProducts(data);
+        } else {
+          console.error('Products data is not an array:', data);
+        }
       }
     } catch (e) {
       console.error('Error fetching products:', e);
@@ -181,7 +198,11 @@ export default function App() {
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
-        setMyOrders(data);
+        if (Array.isArray(data)) {
+          setMyOrders(data);
+        } else {
+          console.error('My orders data is not an array:', data);
+        }
       }
     } catch (e) {
       console.error('Error fetching my orders:', e);
@@ -195,7 +216,11 @@ export default function App() {
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
-        setPartnerOrders(data);
+        if (Array.isArray(data)) {
+          setPartnerOrders(data);
+        } else {
+          console.error('Partner orders data is not an array:', data);
+        }
       }
     } catch (e) {
       console.error('Error fetching partner orders:', e);
@@ -475,6 +500,12 @@ export default function App() {
 
       <section className="px-6 mt-8">
         <h2 className="text-lg font-display font-bold mb-4">Estabelecimentos</h2>
+        {error && (
+          <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-red-600 text-sm mb-4">
+            {error}
+            <button onClick={fetchStores} className="ml-2 underline font-bold">Tentar novamente</button>
+          </div>
+        )}
         <div className="space-y-4">
           {stores.map(s => (
             <div 
