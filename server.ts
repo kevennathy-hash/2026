@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer } from 'http';
-import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import cors from 'cors';
@@ -312,21 +311,21 @@ export { app };
 // Vite middleware for development
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static('dist'));
-    app.get('*', (req, res) => res.sendFile(path.resolve('dist/index.html')));
-  }
-
-  const PORT = 3000;
-  if (process.env.NODE_ENV !== 'production') {
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running on http://0.0.0.0:${PORT}`);
-    });
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+      
+      const PORT = 3000;
+      server.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on http://0.0.0.0:${PORT}`);
+      });
+    } catch (e) {
+      console.error('Failed to start Vite:', e);
+    }
   }
 }
 
