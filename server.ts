@@ -10,12 +10,17 @@ dotenv.config();
 
 const getSupabase = () => {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   
   if (!url || !key) {
-    throw new Error('Configuração do Supabase ausente (URL ou Service Key). Verifique as variáveis de ambiente no Vercel.');
+    return null;
   }
-  return createClient(url, key);
+  try {
+    return createClient(url, key);
+  } catch (e) {
+    console.error('Erro ao criar cliente Supabase:', e);
+    return null;
+  }
 };
 
 const app = express();
@@ -48,13 +53,20 @@ app.use(express.json());
 
 // API Routes
 app.get('/api/ping', (req, res) => {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     env: {
-      hasUrl: !!(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL),
-      hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
-    }
+      hasUrl: !!url,
+      hasServiceKey: !!key,
+      hasAnonKey: !!anonKey,
+      urlPrefix: url ? url.substring(0, 15) + '...' : null
+    },
+    nodeEnv: process.env.NODE_ENV
   });
 });
 
@@ -64,6 +76,7 @@ app.post('/api/auth/register', async (req, res) => {
   
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data, error } = await supabase
       .from('users')
       .insert([{ 
@@ -94,6 +107,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { phone, pin } = req.body;
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -120,6 +134,9 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/stores', async (req, res) => {
   try {
     const supabase = getSupabase();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Configuração do banco de dados ausente no Vercel. Verifique as variáveis de ambiente.' });
+    }
     const { data: stores, error } = await supabase
       .from('stores')
       .select('*')
@@ -135,6 +152,7 @@ app.get('/api/stores', async (req, res) => {
 app.get('/api/stores/:id/products', async (req, res) => {
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
@@ -153,6 +171,7 @@ app.post('/api/orders', async (req, res) => {
   
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([{ client_id, store_id, total, payment_method, change_for }])
@@ -183,6 +202,7 @@ app.post('/api/orders', async (req, res) => {
 app.get('/api/orders/client/:id', async (req, res) => {
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -209,6 +229,7 @@ app.get('/api/orders/client/:id', async (req, res) => {
 app.get('/api/orders/store/:id', async (req, res) => {
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data: orders, error } = await supabase
       .from('orders')
       .select(`
@@ -237,6 +258,7 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { error } = await supabase
       .from('orders')
       .update({ status })
@@ -254,6 +276,7 @@ app.post('/api/partner/store', upload.fields([{ name: 'parking' }, { name: 'inte
   
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     let parking_photo = null;
     let interior_photo = null;
 
@@ -294,6 +317,7 @@ app.post('/api/partner/products', upload.single('photo'), async (req: any, res) 
     }
 
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { data, error } = await supabase
       .from('products')
       .insert([{ store_id, name, description, price: parseFloat(price), category, photo }])
@@ -310,6 +334,7 @@ app.post('/api/partner/products', upload.single('photo'), async (req: any, res) 
 app.delete('/api/partner/products/:id', async (req, res) => {
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { error } = await supabase
       .from('products')
       .delete()
@@ -326,6 +351,7 @@ app.patch('/api/partner/store/:id/status', async (req, res) => {
   const { status } = req.body;
   try {
     const supabase = getSupabase();
+    if (!supabase) return res.status(500).json({ error: 'Erro de configuração do banco de dados.' });
     const { error } = await supabase
       .from('stores')
       .update({ status })
@@ -336,6 +362,16 @@ app.patch('/api/partner/store/:id/status', async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Global Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Global Error Handler:', err);
+  res.status(500).json({ 
+    error: 'Erro interno no servidor', 
+    message: err.message,
+    path: req.path
+  });
 });
 
 export { app };
