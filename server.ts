@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import multer from 'multer';
 
 dotenv.config();
 
@@ -14,6 +15,27 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const app = express();
 const server = createServer(app);
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper to upload to Supabase Storage
+async function uploadToSupabase(file: any, bucket: string) {
+  const fileName = `${Date.now()}-${file.originalname}`;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    });
+  
+  if (error) throw error;
+  
+  const { data: { publicUrl } } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(fileName);
+    
+  return publicUrl;
+}
 
 app.use(cors());
 app.use(express.json());
@@ -187,16 +209,29 @@ app.patch('/api/orders/:id/status', async (req, res) => {
   }
 });
 
-app.post('/api/partner/store', async (req, res) => {
+app.post('/api/partner/store', upload.fields([{ name: 'parking' }, { name: 'interior' }]), async (req: any, res) => {
   const { owner_id, name, phone, address, email, delivery_fee, min_free_delivery, whatsapp, category } = req.body;
+  
   try {
+    let parking_photo = null;
+    let interior_photo = null;
+
+    if (req.files['parking']) {
+      parking_photo = await uploadToSupabase(req.files['parking'][0], 'photos');
+    }
+    if (req.files['interior']) {
+      interior_photo = await uploadToSupabase(req.files['interior'][0], 'photos');
+    }
+
     const { data, error } = await supabase
       .from('stores')
       .insert([{ 
         owner_id, name, phone, address, email, 
         delivery_fee: parseFloat(delivery_fee), 
         min_free_delivery: min_free_delivery ? parseFloat(min_free_delivery) : null, 
-        whatsapp, category 
+        whatsapp, category,
+        parking_photo,
+        interior_photo
       }])
       .select()
       .single();
@@ -208,12 +243,17 @@ app.post('/api/partner/store', async (req, res) => {
   }
 });
 
-app.post('/api/partner/products', async (req, res) => {
+app.post('/api/partner/products', upload.single('photo'), async (req: any, res) => {
   const { store_id, name, description, price, category } = req.body;
   try {
+    let photo = null;
+    if (req.file) {
+      photo = await uploadToSupabase(req.file, 'photos');
+    }
+
     const { data, error } = await supabase
       .from('products')
-      .insert([{ store_id, name, description, price: parseFloat(price), category }])
+      .insert([{ store_id, name, description, price: parseFloat(price), category, photo }])
       .select()
       .single();
     
@@ -253,6 +293,8 @@ app.patch('/api/partner/store/:id/status', async (req, res) => {
   }
 });
 
+export { app };
+
 // Vite middleware for development
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -267,9 +309,11 @@ async function startServer() {
   }
 
   const PORT = 3000;
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== 'production') {
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
 startServer();
