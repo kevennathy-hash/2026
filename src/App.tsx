@@ -200,12 +200,12 @@ export default function App() {
         }
       } else {
         const text = await res.text();
-        console.error('Resposta não-JSON recebida:', text.substring(0, 200));
-        setError(`Erro de Conexão (Status: ${res.status}). As variáveis de ambiente do Supabase podem estar faltando no Vercel. Por favor, configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas configurações do seu projeto no Vercel.`);
+        console.error('Resposta não-JSON recebida:', text.substring(0, 500));
+        setError(`Erro de Conexão (Status: ${res.status}). O servidor não respondeu com JSON. Isso geralmente indica um erro fatal no servidor. Detalhe: ${text.substring(0, 100)}...`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error fetching stores:', e);
-      setError('Não foi possível conectar ao servidor. Verifique sua conexão.');
+      setError(`Não foi possível conectar ao servidor: ${e.message}`);
     }
   };
 
@@ -1163,10 +1163,18 @@ export default function App() {
             <Bell className="w-10 h-10" />
           </div>
           <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Configuração Pendente</h1>
-          <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-            As chaves do Supabase não foram detectadas no código. Se você já as configurou no Vercel, você <b>precisa fazer um Redeploy</b> para que elas sejam ativadas.
+          <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+            As chaves do Supabase não foram detectadas. Se você já as configurou no Vercel, você <b>precisa fazer um Redeploy</b> (sem usar o cache) para que elas sejam ativadas.
           </p>
-          <Button onClick={() => window.location.reload()}>Já fiz o Redeploy, Recarregar</Button>
+          <div className="space-y-3 w-full max-w-xs mx-auto">
+            <Button onClick={() => window.location.reload()}>Já fiz o Redeploy, Recarregar</Button>
+            <button 
+              onClick={() => alert(`Diagnóstico:\nURL: ${supabaseUrl ? 'OK' : 'Faltando'}\nKey: ${supabaseAnonKey ? 'OK' : 'Faltando'}\nAmbiente: ${import.meta.env.MODE}`)}
+              className="text-xs text-slate-400 underline w-full"
+            >
+              Ver Detalhes Técnicos
+            </button>
+          </div>
         </div>
       );
     }
