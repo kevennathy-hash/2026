@@ -35,11 +35,25 @@ import { DEVELOPER_INFO, PARTNER_SECRET_CODE, ORDER_STATUS_LABELS, CATEGORIES } 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase configuration missing in frontend. Real-time updates will not work.');
+let supabase: any;
+try {
+  if (supabaseUrl && supabaseAnonKey) {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+  } else {
+    console.warn('Supabase configuration missing in frontend. Real-time updates will not work.');
+    // Create a mock supabase object to prevent crashes
+    supabase = {
+      channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+      removeChannel: () => ({})
+    };
+  }
+} catch (e) {
+  console.error('Failed to initialize Supabase client:', e);
+  supabase = {
+    channel: () => ({ on: () => ({ subscribe: () => ({}) }) }),
+    removeChannel: () => ({})
+  };
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- Components ---
 
@@ -87,6 +101,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
   const [regStep, setRegStep] = useState(1);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
   // Auth State
   const [authData, setAuthData] = useState({ phone: '', pin: '', name: '', email: '', address: '', reference: '', role: 'client' as 'client' | 'partner' });
@@ -97,10 +112,25 @@ export default function App() {
   const [newProduct, setNewProduct] = useState({ name: '', description: '', price: '', category: 'Comida' });
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    const savedStore = localStorage.getItem('store');
-    if (savedUser) setUser(JSON.parse(savedUser));
-    if (savedStore) setStore(JSON.parse(savedStore));
+    const handleError = (event: ErrorEvent) => {
+      console.error('Runtime error caught:', event.error);
+      setRuntimeError(event.message);
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      const savedStore = localStorage.getItem('store');
+      if (savedUser) setUser(JSON.parse(savedUser));
+      if (savedStore) setStore(JSON.parse(savedStore));
+    } catch (e) {
+      console.error('Failed to load state from localStorage:', e);
+      localStorage.removeItem('user');
+      localStorage.removeItem('store');
+    }
     fetchStores();
   }, []);
 
@@ -386,7 +416,7 @@ export default function App() {
         const data = await res.json();
         
         // Generate WhatsApp Link
-        const itemsText = cart.map(i => `${i.quantity}x ${i.name} (R$ ${i.price.toFixed(2)})`).join('\n');
+        const itemsText = cart.map(i => `${i.quantity}x ${i.name} (R$ ${(i.price || 0).toFixed(2)})`).join('\n');
         const message = `*Novo Pedido no Delivery Pira!* 🚀\n\n` +
           `*Pedido:* #${data.orderId}\n` +
           `*Cliente:* ${user.name}\n` +
@@ -394,9 +424,9 @@ export default function App() {
           `*Endereço:* ${user.address}\n` +
           `*Referência:* ${user.reference}\n\n` +
           `*Itens:*\n${itemsText}\n\n` +
-          `*Subtotal:* R$ ${subtotal.toFixed(2)}\n` +
-          `*Taxa de Entrega:* R$ ${selectedStore.delivery_fee.toFixed(2)}\n` +
-          `*TOTAL:* R$ ${total.toFixed(2)}\n\n` +
+          `*Subtotal:* R$ ${(subtotal || 0).toFixed(2)}\n` +
+          `*Taxa de Entrega:* R$ ${(selectedStore.delivery_fee || 0).toFixed(2)}\n` +
+          `*TOTAL:* R$ ${(total || 0).toFixed(2)}\n\n` +
           `*Pagamento:* ${paymentMethod.toUpperCase()}${changeFor ? ` (Troco para R$ ${changeFor})` : ''}`;
         
         const whatsappUrl = `https://wa.me/${selectedStore.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
@@ -529,7 +559,7 @@ export default function App() {
                 <p className="text-sm text-slate-500 mb-2">{s.category}</p>
                 <div className="flex items-center gap-4 text-xs font-medium text-slate-600">
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 30-45 min</span>
-                  <span className="flex items-center gap-1"><ShoppingBag className="w-3 h-3" /> Taxa: R$ {s.delivery_fee.toFixed(2)}</span>
+                  <span className="flex items-center gap-1"><ShoppingBag className="w-3 h-3" /> Taxa: R$ {(s.delivery_fee || 0).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -557,7 +587,7 @@ export default function App() {
             </div>
             <div className="flex flex-col items-center gap-1">
               <span className="text-slate-400 text-xs">Entrega</span>
-              <span>R$ {selectedStore?.delivery_fee.toFixed(2)}</span>
+              <span>R$ {(selectedStore?.delivery_fee || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -572,7 +602,7 @@ export default function App() {
                 <h3 className="font-bold text-slate-900">{p.name}</h3>
                 <p className="text-sm text-slate-500 line-clamp-2 mb-2">{p.description}</p>
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-primary">R$ {p.price.toFixed(2)}</span>
+                  <span className="font-bold text-primary">R$ {(p.price || 0).toFixed(2)}</span>
                   <div className="flex items-center gap-3">
                     {cart.find(i => i.id === p.id) ? (
                       <>
@@ -605,7 +635,7 @@ export default function App() {
           <Button onClick={() => setView('cart')} className="shadow-2xl">
             <ShoppingBag className="w-5 h-5" />
             Ver Carrinho ({cart.reduce((acc, i) => acc + i.quantity, 0)})
-            <span className="ml-auto">R$ {cart.reduce((acc, i) => acc + i.price * i.quantity, 0).toFixed(2)}</span>
+            <span className="ml-auto">R$ {(cart.reduce((acc, i) => acc + i.price * i.quantity, 0) || 0).toFixed(2)}</span>
           </Button>
         </div>
       )}
@@ -631,7 +661,7 @@ export default function App() {
             <div key={item.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-slate-900">{item.name}</h3>
-                <p className="text-sm text-primary font-bold">R$ {item.price.toFixed(2)}</p>
+                <p className="text-sm text-primary font-bold">R$ {(item.price || 0).toFixed(2)}</p>
               </div>
               <div className="flex items-center gap-3">
                 <button onClick={() => removeFromCart(item.id)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
@@ -650,15 +680,15 @@ export default function App() {
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-3">
             <div className="flex justify-between text-slate-500">
               <span>Subtotal</span>
-              <span>R$ {subtotal.toFixed(2)}</span>
+              <span>R$ {(subtotal || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-slate-500">
               <span>Taxa de entrega</span>
-              <span>R$ {delivery.toFixed(2)}</span>
+              <span>R$ {(delivery || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold text-slate-900 pt-3 border-t border-slate-100">
               <span>Total</span>
-              <span>R$ {total.toFixed(2)}</span>
+              <span>R$ {(total || 0).toFixed(2)}</span>
             </div>
           </div>
           <Button onClick={() => setView('checkout')} className="mt-6">Continuar para Pagamento</Button>
@@ -763,7 +793,7 @@ export default function App() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h3 className="font-bold text-slate-900">{o.store_name}</h3>
-                  <p className="text-xs text-slate-400">Pedido #{o.id} • {new Date(o.created_at).toLocaleDateString()}</p>
+                  <p className="text-xs text-slate-400">Pedido #{o.id} • {o.created_at ? new Date(o.created_at).toLocaleDateString() : 'Data desconhecida'}</p>
                 </div>
                 <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full ${
                   o.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
@@ -772,7 +802,7 @@ export default function App() {
                 </span>
               </div>
               <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                <span className="text-sm font-medium text-slate-600">Total: R$ {o.total.toFixed(2)}</span>
+                <span className="text-sm font-medium text-slate-600">Total: R$ {(o.total || 0).toFixed(2)}</span>
                 <button className="text-primary text-sm font-bold">Ver Detalhes</button>
               </div>
             </div>
@@ -911,7 +941,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-900">{o.client_name}</h3>
                   <p className="text-xs text-slate-400">Pedido #{o.id} • {o.payment_method.toUpperCase()}</p>
                 </div>
-                <span className="text-sm font-bold text-primary">R$ {o.total.toFixed(2)}</span>
+                <span className="text-sm font-bold text-primary">R$ {(o.total || 0).toFixed(2)}</span>
               </div>
               <div className="text-sm text-slate-600 mb-4 bg-slate-50 p-3 rounded-xl">
                 <p className="flex items-center gap-2 mb-1"><MapPin className="w-3 h-3" /> {o.client_address}</p>
@@ -955,7 +985,7 @@ export default function App() {
             <div className="flex-1">
               <h3 className="font-bold text-slate-900">{p.name}</h3>
               <p className="text-sm text-slate-500 line-clamp-1">{p.description}</p>
-              <p className="text-sm font-bold text-primary mt-1">R$ {p.price.toFixed(2)}</p>
+              <p className="text-sm font-bold text-primary mt-1">R$ {(p.price || 0).toFixed(2)}</p>
             </div>
             <button onClick={() => handleDeleteProduct(p.id)} className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center">
               <Trash2 className="w-5 h-5" />
@@ -1124,6 +1154,24 @@ export default function App() {
   // --- Main Render ---
 
   const renderView = () => {
+    if (runtimeError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-white">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6">
+            <X className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Ops! Algo deu errado.</h1>
+          <p className="text-slate-500 mb-8 text-sm leading-relaxed">
+            Ocorreu um erro inesperado no aplicativo. Tente recarregar a página ou limpar o cache.
+          </p>
+          <Button onClick={() => { localStorage.clear(); window.location.reload(); }}>
+            Limpar Dados e Recarregar
+          </Button>
+          <p className="mt-6 text-[10px] text-slate-300 font-mono break-all">{runtimeError}</p>
+        </div>
+      );
+    }
+
     if (view === 'login') return renderLogin();
     if (view === 'register') return renderRegister();
     
