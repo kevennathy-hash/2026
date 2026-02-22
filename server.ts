@@ -13,6 +13,11 @@ const getSupabase = () => {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   
   if (!url || !key) {
+    console.error('ERRO: Configuração do Supabase incompleta no servidor.', { 
+      temUrl: !!url, 
+      temKey: !!key,
+      urlPreview: url ? url.substring(0, 10) + '...' : 'nulo'
+    });
     return null;
   }
   try {
