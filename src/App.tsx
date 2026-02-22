@@ -201,7 +201,7 @@ export default function App() {
       } else {
         const text = await res.text();
         console.error('Resposta não-JSON recebida:', text.substring(0, 200));
-        setError(`O servidor retornou uma resposta inválida (Status: ${res.status}). Verifique se as variáveis de ambiente (SUPABASE_URL, etc) estão configuradas no Vercel.`);
+        setError(`Erro de Conexão (Status: ${res.status}). As variáveis de ambiente do Supabase podem estar faltando no Vercel. Por favor, configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas configurações do seu projeto no Vercel.`);
       }
     } catch (e) {
       console.error('Error fetching stores:', e);
@@ -1156,6 +1156,21 @@ export default function App() {
   console.log('App Rendering:', { view, user: !!user, storesCount: stores.length });
 
   const renderView = () => {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-white">
+          <div className="w-20 h-20 bg-orange-50 text-primary rounded-3xl flex items-center justify-center mb-6">
+            <Bell className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Configuração Pendente</h1>
+          <p className="text-slate-500 mb-8 text-sm leading-relaxed">
+            As chaves do Supabase não foram detectadas no código. Se você já as configurou no Vercel, você <b>precisa fazer um Redeploy</b> para que elas sejam ativadas.
+          </p>
+          <Button onClick={() => window.location.reload()}>Já fiz o Redeploy, Recarregar</Button>
+        </div>
+      );
+    }
+
     if (runtimeError) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-white">

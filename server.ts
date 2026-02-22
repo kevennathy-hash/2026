@@ -61,10 +61,12 @@ app.get('/api/ping', (req, res) => {
     status: 'ok', 
     timestamp: new Date().toISOString(),
     env: {
-      hasUrl: !!url,
-      hasServiceKey: !!key,
-      hasAnonKey: !!anonKey,
-      urlPrefix: url ? url.substring(0, 15) + '...' : null
+      hasViteUrl: !!process.env.VITE_SUPABASE_URL,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY,
+      urlPreview: url ? `${url.substring(0, 10)}...` : 'missing',
+      keyPreview: key ? `${key.substring(0, 5)}...` : (anonKey ? `${anonKey.substring(0, 5)}...` : 'missing')
     },
     nodeEnv: process.env.NODE_ENV
   });
@@ -119,11 +121,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    const { data: store } = await getSupabase()
+    const { data: store } = await supabase
       .from('stores')
       .select('*')
       .eq('owner_id', user.id)
-      .single();
+      .maybeSingle();
 
     res.json({ user, store });
   } catch (e: any) {
@@ -187,7 +189,7 @@ app.post('/api/orders', async (req, res) => {
       price: item.price
     }));
 
-    const { error: itemsError } = await getSupabase()
+    const { error: itemsError } = await supabase
       .from('order_items')
       .insert(orderItems);
 
