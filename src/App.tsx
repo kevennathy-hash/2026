@@ -26,7 +26,7 @@ import {
   PlusCircle,
   ExternalLink
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@supabase/supabase-js';
 import { User, Store, Product, Order, CartItem } from './types';
 import { DEVELOPER_INFO, PARTNER_SECRET_CODE, ORDER_STATUS_LABELS, CATEGORIES } from './constants';
@@ -398,7 +398,7 @@ export default function App() {
     if (!user || !selectedStore) return;
     setLoading(true);
     try {
-      const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+      const subtotal = cart.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 0), 0);
       const total = subtotal + selectedStore.delivery_fee;
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -635,7 +635,7 @@ export default function App() {
           <Button onClick={() => setView('cart')} className="shadow-2xl">
             <ShoppingBag className="w-5 h-5" />
             Ver Carrinho ({cart.reduce((acc, i) => acc + i.quantity, 0)})
-            <span className="ml-auto">R$ {(cart.reduce((acc, i) => acc + i.price * i.quantity, 0) || 0).toFixed(2)}</span>
+            <span className="ml-auto">R$ {(cart.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 0), 0) || 0).toFixed(2)}</span>
           </Button>
         </div>
       )}
@@ -643,7 +643,7 @@ export default function App() {
   );
 
   const renderCart = () => {
-    const subtotal = cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
+    const subtotal = cart.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 0), 0);
     const delivery = selectedStore?.delivery_fee || 0;
     const total = subtotal + delivery;
 
@@ -939,7 +939,7 @@ export default function App() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="font-bold text-slate-900">{o.client_name}</h3>
-                  <p className="text-xs text-slate-400">Pedido #{o.id} • {o.payment_method.toUpperCase()}</p>
+                  <p className="text-xs text-slate-400">Pedido #{o.id} • {(o.payment_method || '').toUpperCase()}</p>
                 </div>
                 <span className="text-sm font-bold text-primary">R$ {(o.total || 0).toFixed(2)}</span>
               </div>
@@ -1153,6 +1153,8 @@ export default function App() {
 
   // --- Main Render ---
 
+  console.log('App Rendering:', { view, user: !!user, storesCount: stores.length });
+
   const renderView = () => {
     if (runtimeError) {
       return (
@@ -1198,17 +1200,9 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 relative">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={view}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-        >
-          {renderView()}
-        </motion.div>
-      </AnimatePresence>
+      <div key={view}>
+        {renderView()}
+      </div>
 
       {/* Notifications Toast */}
       <div className="fixed top-6 left-6 right-6 z-50 pointer-events-none">
