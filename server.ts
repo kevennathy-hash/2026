@@ -8,7 +8,11 @@ import multer from 'multer';
 
 dotenv.config();
 
+let supabaseCached: any = null;
+
 const getSupabase = () => {
+  if (supabaseCached) return supabaseCached;
+
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   
@@ -21,7 +25,8 @@ const getSupabase = () => {
     return null;
   }
   try {
-    return createClient(url, key);
+    supabaseCached = createClient(url, key);
+    return supabaseCached;
   } catch (e) {
     console.error('Erro ao criar cliente Supabase:', e);
     return null;
@@ -58,23 +63,27 @@ app.use(express.json());
 
 // API Routes
 app.get('/api/ping', (req, res) => {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  try {
+    const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    env: {
-      hasViteUrl: !!process.env.VITE_SUPABASE_URL,
-      hasSupabaseUrl: !!process.env.SUPABASE_URL,
-      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      hasAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY,
-      urlPreview: url ? `${url.substring(0, 10)}...` : 'missing',
-      keyPreview: key ? `${key.substring(0, 5)}...` : (anonKey ? `${anonKey.substring(0, 5)}...` : 'missing')
-    },
-    nodeEnv: process.env.NODE_ENV
-  });
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      env: {
+        hasViteUrl: !!process.env.VITE_SUPABASE_URL,
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        hasAnonKey: !!process.env.VITE_SUPABASE_ANON_KEY,
+        urlPreview: url ? `${url.substring(0, 10)}...` : 'missing',
+        keyPreview: key ? `${key.substring(0, 5)}...` : (anonKey ? `${anonKey.substring(0, 5)}...` : 'missing')
+      },
+      nodeEnv: process.env.NODE_ENV
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Erro no ping', message: e.message });
+  }
 });
 
 app.post('/api/auth/register', async (req, res) => {
@@ -383,9 +392,9 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 export { app };
 
-// Vite middleware for development
-async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+// Vite middleware for development - ONLY in dev mode
+if (process.env.NODE_ENV !== 'production') {
+  const startDevServer = async () => {
     try {
       const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
@@ -396,12 +405,11 @@ async function startServer() {
       
       const PORT = 3000;
       server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on http://0.0.0.0:${PORT}`);
+        console.log(`Dev server running on http://0.0.0.0:${PORT}`);
       });
     } catch (e) {
-      console.error('Failed to start Vite:', e);
+      console.error('Failed to start Vite dev server:', e);
     }
-  }
+  };
+  startDevServer();
 }
-
-startServer();
